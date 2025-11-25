@@ -1,0 +1,13 @@
+{
+    "name": "shogi-server",
+    "version": "1.0.0",
+    "description": "Multiplayer server for Shogi game",
+    "main": "server/index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node server/index.js"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

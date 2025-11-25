@@ -8,6 +8,9 @@ import { PromotionDialog } from './components/PromotionDialog';
 import { StyleSelector } from './components/StyleSelector';
 import { ColorSelector } from './components/ColorSelector';
 import { Color } from 'shogi.js';
+import { MainMenu } from './components/MainMenu';
+import { WaitingRoom } from './components/WaitingRoom';
+import { api } from './services/api';
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -114,6 +117,11 @@ const ResetButton = styled.button`
   }
 `;
 
+const ExitButton = styled(ResetButton)`
+  background-color: #ff4444;
+  margin-left: 10px;
+`;
+
 const GameArea = styled.div`
   display: flex;
   flex-direction: column;
@@ -150,6 +158,11 @@ function App() {
   const [whiteControlsExpanded, setWhiteControlsExpanded] = useState(false);
   const [blackControlsExpanded, setBlackControlsExpanded] = useState(false);
 
+  const [view, setView] = useState<'menu' | 'waiting' | 'game'>('menu');
+  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
+  const [playerColor, setPlayerColor] = useState<Color | null>(null);
+  const [gameToken, setGameToken] = useState<string | null>(null);
+
   useEffect(() => {
     // Initialize Telegram Web App
     WebApp.ready();
@@ -172,7 +185,25 @@ function App() {
 
     // Handle back button click
     const handleBackButton = () => {
-      if (window.confirm('¿Estás seguro de que quieres salir del juego?')) {
+      if (view === 'game') {
+        if (window.confirm('¿Estás seguro de que quieres salir del juego?')) {
+          setView('menu');
+          setGameToken(null);
+          setGameMode('solo');
+          setPlayerColor(null);
+          resetGame();
+        }
+      } else if (view === 'waiting') {
+        // Cancel waiting
+        // We can't easily call handleCancelGame here because it's async and inside useEffect, 
+        // but we can just close app or return to menu.
+        // For now, let's just close app if not in game, or maybe return to menu if in waiting?
+        // Spec says "Exit/Menu" button in game.
+        // Let's stick to default close behavior or confirm exit.
+        if (window.confirm('¿Salir de la aplicación?')) {
+          WebApp.close();
+        }
+      } else {
         WebApp.close();
       }
     };
@@ -183,84 +214,182 @@ function App() {
     return () => {
       WebApp.BackButton.offClick(handleBackButton);
     };
-  }, []);
+  }, [view, resetGame]); // Added dependencies
+
+  // Polling effect
+  useEffect(() => {
+    let interval: any;
+    if (view === 'waiting' && gameToken) {
+      interval = setInterval(async () => {
+        try {
+          const { status } = await api.checkStatus(gameToken);
+          if (status === 'active') {
+            setGameMode('multiplayer');
+            setPlayerColor(Color.Black); // Creator is Black (Sente)
+            setView('game');
+            resetGame();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 2000);
+    }
+    return () => clearInterval(interval as any);
+  }, [view, gameToken, resetGame]);
+
+  const handleCreateGame = async () => {
+    try {
+      const { token } = await api.createGame();
+      setGameToken(token);
+      setView('waiting');
+    } catch (e) {
+      alert('Error creating game');
+    }
+  };
+
+  const handleJoinGame = async (token: string) => {
+    try {
+      await api.joinGame(token);
+      setGameToken(token);
+      setPlayerColor(Color.White); // Joiner is White (Gote)
+      setGameMode('multiplayer');
+      setView('game');
+      resetGame();
+    } catch (e: any) {
+      alert('Error joining game: ' + (e.message || 'Unknown error'));
+    }
+  };
+
+  const handleCancelGame = async () => {
+    if (gameToken) {
+      await api.cancelGame(gameToken);
+      setGameToken(null);
+      setView('menu');
+    }
+  };
+
+  const handleExitGame = () => {
+    if (confirm('Exit to menu?')) {
+      setView('menu');
+      setGameToken(null);
+      setGameMode('solo');
+      setPlayerColor(null);
+      resetGame();
+    }
+  };
+
+  const onBoardClick = (x: number, y: number) => {
+    if (gameMode === 'multiplayer' && playerColor !== null && turn !== playerColor) return;
+    handleBoardClick(x, y);
+  };
+
+  const onHandClick = (piece: any, color: Color) => {
+    if (gameMode === 'multiplayer' && playerColor !== null) {
+      if (color !== playerColor) return;
+      if (turn !== playerColor) return;
+    }
+    handleHandClick(piece, color);
+  };
 
   return (
     <>
       <GlobalStyle />
-      <AppContainer>
-        <TopPanel>
-          <TurnIndicator>
-            Turno: {turn === Color.Black ? '⚫ Black (Sente)' : '⚪ White (Gote)'}
-          </TurnIndicator>
-          <ResetButton onClick={resetGame}>Reset</ResetButton>
-        </TopPanel>
+      {view === 'menu' && (
+        <MainMenu
+          onPlaySolo={() => {
+            setGameMode('solo');
+            setPlayerColor(null);
+            setView('game');
+            resetGame();
+          }}
+          onCreateGame={handleCreateGame}
+          onJoinGame={handleJoinGame}
+        />
+      )}
 
-        <GameArea>
-          {/* White Player Controls */}
-          <PlayerControls $isExpanded={whiteControlsExpanded}>
-            <PlayerHeader
-              $player={Color.White}
-              onClick={() => setWhiteControlsExpanded(!whiteControlsExpanded)}
-            >
-              <PlayerIcon>⚪</PlayerIcon>
-              White (Gote)
-              <ExpandIcon $isExpanded={whiteControlsExpanded}>▼</ExpandIcon>
-            </PlayerHeader>
-            <ControlsContent $isExpanded={whiteControlsExpanded}>
-              <StyleSelector player={Color.White} />
-              <ColorSelector player={Color.White} />
-            </ControlsContent>
-          </PlayerControls>
+      {view === 'waiting' && gameToken && (
+        <WaitingRoom
+          token={gameToken}
+          onCancel={handleCancelGame}
+        />
+      )}
 
-          {/* White Hand */}
-          <Hand
-            hands={hands}
-            color={Color.White}
-            onPieceClick={handleHandClick}
-            selected={selected && !('x' in selected) ? selected : null}
-          />
+      {view === 'game' && (
+        <AppContainer>
+          <TopPanel>
+            <TurnIndicator>
+              Turno: {turn === Color.Black ? '⚫ Black (Sente)' : '⚪ White (Gote)'}
+            </TurnIndicator>
+            <ResetButton onClick={resetGame}>Reset</ResetButton>
+            <ExitButton onClick={handleExitGame}>Exit</ExitButton>
+          </TopPanel>
 
-          <Board
-            board={board}
-            onSquareClick={handleBoardClick}
-            selected={selected && 'x' in selected ? selected : null}
-            possibleMoves={possibleMoves}
-          />
+          <GameArea>
+            {/* White Player Controls */}
+            <PlayerControls $isExpanded={whiteControlsExpanded}>
+              <PlayerHeader
+                $player={Color.White}
+                onClick={() => setWhiteControlsExpanded(!whiteControlsExpanded)}
+              >
+                <PlayerIcon>⚪</PlayerIcon>
+                White (Gote)
+                <ExpandIcon $isExpanded={whiteControlsExpanded}>▼</ExpandIcon>
+              </PlayerHeader>
+              <ControlsContent $isExpanded={whiteControlsExpanded}>
+                <StyleSelector player={Color.White} />
+                <ColorSelector player={Color.White} />
+              </ControlsContent>
+            </PlayerControls>
 
-          {/* Black Hand */}
-          <Hand
-            hands={hands}
-            color={Color.Black}
-            onPieceClick={handleHandClick}
-            selected={selected && !('x' in selected) ? selected : null}
-          />
+            {/* White Hand */}
+            <Hand
+              hands={hands}
+              color={Color.White}
+              onPieceClick={onHandClick}
+              selected={selected && !('x' in selected) ? selected : null}
+            />
 
-          {/* Black Player Controls */}
-          <PlayerControls $isExpanded={blackControlsExpanded}>
-            <PlayerHeader
-              $player={Color.Black}
-              onClick={() => setBlackControlsExpanded(!blackControlsExpanded)}
-            >
-              <PlayerIcon>⚫</PlayerIcon>
-              Black (Sente)
-              <ExpandIcon $isExpanded={blackControlsExpanded}>▼</ExpandIcon>
-            </PlayerHeader>
-            <ControlsContent $isExpanded={blackControlsExpanded}>
-              <StyleSelector player={Color.Black} />
-              <ColorSelector player={Color.Black} />
-            </ControlsContent>
-          </PlayerControls>
-        </GameArea>
+            <Board
+              board={board}
+              onSquareClick={onBoardClick}
+              selected={selected && 'x' in selected ? selected : null}
+              possibleMoves={possibleMoves}
+            />
 
-        {/* Promotion Dialog */}
-        {pendingPromotion && (
-          <PromotionDialog
-            onPromote={() => handlePromotionChoice(true)}
-            onDecline={() => handlePromotionChoice(false)}
-          />
-        )}
-      </AppContainer>
+            {/* Black Hand */}
+            <Hand
+              hands={hands}
+              color={Color.Black}
+              onPieceClick={onHandClick}
+              selected={selected && !('x' in selected) ? selected : null}
+            />
+
+            {/* Black Player Controls */}
+            <PlayerControls $isExpanded={blackControlsExpanded}>
+              <PlayerHeader
+                $player={Color.Black}
+                onClick={() => setBlackControlsExpanded(!blackControlsExpanded)}
+              >
+                <PlayerIcon>⚫</PlayerIcon>
+                Black (Sente)
+                <ExpandIcon $isExpanded={blackControlsExpanded}>▼</ExpandIcon>
+              </PlayerHeader>
+              <ControlsContent $isExpanded={blackControlsExpanded}>
+                <StyleSelector player={Color.Black} />
+                <ColorSelector player={Color.Black} />
+              </ControlsContent>
+            </PlayerControls>
+          </GameArea>
+
+          {/* Promotion Dialog */}
+          {pendingPromotion && (
+            <PromotionDialog
+              onPromote={() => handlePromotionChoice(true)}
+              onDecline={() => handlePromotionChoice(false)}
+            />
+          )}
+        </AppContainer>
+      )}
     </>
   );
 }
