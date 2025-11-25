@@ -75,19 +75,30 @@ const DropdownItem = styled.button<{ $selected?: boolean }>`
     }
 `;
 
-const styleLabels: Record<PieceStyle, string> = {
+const defaultStyleLabels: Record<string, string> = {
     classic: 'Clásico',
     english: 'Inicial (Inglés)',
     symbols: 'Símbolos (Ajedrez)'
 };
 
 export const StyleSelector: React.FC<StyleSelectorProps> = ({ player }) => {
-    const { blackStyle, whiteStyle, setBlackStyle, setWhiteStyle } = usePlayerStyle();
+    const { blackStyle, whiteStyle, setBlackStyle, setWhiteStyle, availableSkins } = usePlayerStyle();
     const [isOpen, setIsOpen] = useState(false);
 
     const currentStyle = player === Color.Black ? blackStyle.style : whiteStyle.style;
     const setStyle = player === Color.Black ? setBlackStyle : setWhiteStyle;
     const playerIcon = player === Color.Black ? '⚫' : '⚪';
+
+    // Build combined list of styles
+    const allStyles: Array<{ id: string, name: string }> = [
+        ...Object.keys(defaultStyleLabels).map(id => ({ id, name: defaultStyleLabels[id] })),
+        ...availableSkins.map(skin => ({ id: skin.id, name: skin.name }))
+    ];
+
+    const getCurrentStyleName = () => {
+        const found = allStyles.find(s => s.id === currentStyle);
+        return found ? found.name : currentStyle;
+    };
 
     const handleSelect = (newStyle: PieceStyle) => {
         setStyle(newStyle);
@@ -99,18 +110,18 @@ export const StyleSelector: React.FC<StyleSelectorProps> = ({ player }) => {
         <SelectorContainer>
             <SelectorButton $player={player} onClick={() => setIsOpen(!isOpen)}>
                 <PlayerIcon>{playerIcon}</PlayerIcon>
-                Estilo: {styleLabels[currentStyle]} ▼
+                Estilo: {getCurrentStyleName()} ▼
             </SelectorButton>
 
             {isOpen && (
                 <Dropdown>
-                    {(Object.keys(styleLabels) as PieceStyle[]).map(s => (
+                    {allStyles.map(style => (
                         <DropdownItem
-                            key={s}
-                            $selected={s === currentStyle}
-                            onClick={() => handleSelect(s)}
+                            key={style.id}
+                            $selected={style.id === currentStyle}
+                            onClick={() => handleSelect(style.id)}
                         >
-                            {styleLabels[s]}
+                            {style.name}
                         </DropdownItem>
                     ))}
                 </Dropdown>

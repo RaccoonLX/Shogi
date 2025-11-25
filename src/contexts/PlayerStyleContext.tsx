@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { Color } from 'shogi.js';
 
-export type PieceStyle = 'classic' | 'english' | 'symbols';
+export type PieceStyle = string; // Allows custom skin IDs
 
 export interface PieceColors {
     normal: string;
@@ -50,9 +50,13 @@ interface PlayerStyleContextType {
     setBlackColorPreset: (preset: string) => void;
     setWhiteColorPreset: (preset: string) => void;
     getStyleForColor: (color: Color) => PlayerStyle;
+    // Skins support
+    availableSkins: Array<{ id: string, name: string, path: string }>;
+    getSkinConfig: (styleId: string) => Record<string, string> | null;
 }
 
 const PlayerStyleContext = createContext<PlayerStyleContextType | undefined>(undefined);
+
 
 export const PlayerStyleProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [blackStyle, setBlackStyleState] = useState<PlayerStyle>({
@@ -95,6 +99,32 @@ export const PlayerStyleProvider: React.FC<{ children: ReactNode }> = ({ childre
         return color === Color.Black ? blackStyle : whiteStyle;
     };
 
+    // Skins state and loading
+    const [availableSkins, setAvailableSkins] = useState<Array<{ id: string, name: string, path: string }>>([]);
+    const [skinConfigs, setSkinConfigs] = useState<Record<string, Record<string, string>>>({});
+
+    useEffect(() => {
+        const basePath = import.meta.env.BASE_URL || '/';
+        fetch(`${basePath}skins/skins.json`)
+            .then(res => res.json())
+            .then((skins: Array<{ id: string, name: string, path: string }>) => {
+                setAvailableSkins(skins);
+                skins.forEach(skin => {
+                    fetch(`${basePath}skins/${skin.path}/config.json`)
+                        .then(r => r.json())
+                        .then((cfg: Record<string, string>) => {
+                            setSkinConfigs(prev => ({ ...prev, [skin.id]: cfg }));
+                        })
+                        .catch(() => console.warn(`Failed to load config for skin ${skin.id}`));
+                });
+            })
+            .catch(() => console.warn('Failed to load skins.json'));
+    }, []);
+
+    const getSkinConfig = (styleId: string): Record<string, string> | null => {
+        return skinConfigs[styleId] || null;
+    };
+
     return (
         <PlayerStyleContext.Provider value={{
             blackStyle,
@@ -103,7 +133,10 @@ export const PlayerStyleProvider: React.FC<{ children: ReactNode }> = ({ childre
             setWhiteStyle,
             setBlackColorPreset,
             setWhiteColorPreset,
-            getStyleForColor
+            getStyleForColor,
+            // Skins support
+            availableSkins,
+            getSkinConfig
         }}>
             {children}
         </PlayerStyleContext.Provider>

@@ -99,7 +99,7 @@ const darkenColor = (color: string): string => {
 
 export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, isPossibleMove, isLastMove, flipped }) => {
     const [showTooltip, setShowTooltip] = useState(false);
-    const { getStyleForColor } = usePlayerStyle();
+    const { getStyleForColor, getSkinConfig } = usePlayerStyle();
 
     if (!kind || color === undefined) {
         return (
@@ -113,10 +113,13 @@ export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, 
     }
 
     const playerStyle = getStyleForColor(color);
-    const text = getPieceDisplay(kind, playerStyle.style);
+    const skinConfig = getSkinConfig(playerStyle.style);
+    const isCustomSkin = !!skinConfig;
+    const imageFile = isCustomSkin ? skinConfig?.[kind] : null;
+    const text = isCustomSkin ? '' : getPieceDisplay(kind, playerStyle.style);
     const isPromoted = promotedPieces.includes(kind);
-    const bgColor = isPromoted ? playerStyle.colors.promoted : playerStyle.colors.normal;
-    const borderColor = darkenColor(bgColor);
+    const bgColor = isCustomSkin ? '' : (isPromoted ? playerStyle.colors.promoted : playerStyle.colors.normal);
+    const borderColor = isCustomSkin ? '' : darkenColor(bgColor);
 
     return (
         <PieceContainer
@@ -129,16 +132,29 @@ export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, 
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
         >
-            <PieceShape
-                $color={color}
-                $isSelected={isSelected}
-                $bgColor={bgColor}
-                $borderColor={borderColor}
-            >
-                <PieceText $color={color} $isPromoted={isPromoted} $flipped={flipped}>
-                    {text}
-                </PieceText>
-            </PieceShape>
+            {isCustomSkin && imageFile ? (
+                <img
+                    src={`${import.meta.env.BASE_URL}skins/${playerStyle.style}/${imageFile}`}
+                    alt={kind}
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        transform: flipped ? 'rotate(180deg)' : 'none',
+                        objectFit: 'contain',
+                    }}
+                />
+            ) : (
+                <PieceShape
+                    $color={color}
+                    $isSelected={isSelected}
+                    $bgColor={bgColor}
+                    $borderColor={borderColor}
+                >
+                    <PieceText $color={color} $isPromoted={isPromoted} $flipped={flipped}>
+                        {text}
+                    </PieceText>
+                </PieceShape>
+            )}
             {/* Only show tooltip if not selected */}
             {showTooltip && !isSelected && <Tooltip kind={kind} />}
         </PieceContainer>

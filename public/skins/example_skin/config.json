@@ -1,0 +1,16 @@
+{
+    "FU": "pawn.png",
+    "KY": "lance.png",
+    "KE": "knight.png",
+    "GI": "silver.png",
+    "KI": "gold.png",
+    "KA": "bishop.png",
+    "HI": "rook.png",
+    "OU": "king.png",
+    "TO": "pawn_promoted.png",
+    "NY": "lance_promoted.png",
+    "NK": "knight_promoted.png",
+    "NG": "silver_promoted.png",
+    "UM": "bishop_promoted.png",
+    "RY": "rook_promoted.png"
+}
