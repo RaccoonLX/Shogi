@@ -3,19 +3,17 @@ import cors from 'cors';
 
 const app = express();
 
-// Configure CORS to allow requests from both local development and GitHub Pages
-app.use(cors({
-  origin: [
-    'http://localhost:5174',
-    'https://raccoonlx.github.io'
-  ],
-  credentials: true
-}));
-
+// Simple CORS - allow all origins for testing
+app.use(cors());
 app.use(express.json());
 
+// Test endpoint
+app.get('/test', (req, res) => {
+  console.log('Test endpoint hit');
+  res.json({ message: 'Server is working!' });
+});
+
 // In-memory storage for tokens
-// token -> { status: 'waiting' | 'active' }
 const tokens = new Map();
 
 // Helper to generate 6-digit alphanumeric token
@@ -30,11 +28,13 @@ function generateToken() {
 
 // Create a new game token
 app.post('/api/create', (req, res) => {
+  console.log('Create endpoint hit');
   let token;
   do {
     token = generateToken();
   } while (tokens.has(token));
   tokens.set(token, { status: 'waiting' });
+  console.log('Created token:', token);
   res.json({ token });
 });
 
@@ -48,7 +48,6 @@ app.post('/api/join', (req, res) => {
   if (game.status !== 'waiting') {
     return res.status(400).json({ error: 'Game already started or invalid' });
   }
-  // Mark as active
   game.status = 'active';
   tokens.set(token, game);
   res.json({ success: true });
@@ -74,7 +73,12 @@ app.post('/api/cancel', (req, res) => {
   res.status(400).json({ error: 'Invalid token' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 4000;
+
+const server = app.listen(PORT, () => {
   console.log(`Multiplayer server listening on port ${PORT}`);
+});
+
+server.on('error', (error) => {
+  console.error('Server error:', error);
 });
