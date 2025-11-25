@@ -3,7 +3,7 @@ import { Color } from 'shogi.js';
 import type { Kind } from 'shogi.js';
 import styled from 'styled-components';
 import { Tooltip } from './Tooltip';
-import { usePieceStyle } from '../contexts/PieceStyleContext';
+import { usePlayerStyle } from '../contexts/PlayerStyleContext';
 import { getPieceDisplay } from '../utils/pieceDisplay';
 
 interface PieceProps {
@@ -15,9 +15,9 @@ interface PieceProps {
     isLastMove?: boolean;
 }
 
-const PieceContainer = styled.div<{ 
-    $color?: Color; 
-    $isSelected?: boolean; 
+const PieceContainer = styled.div<{
+    $color?: Color;
+    $isSelected?: boolean;
     $isPossibleMove?: boolean;
     $isLastMove?: boolean;
     $isPromoted?: boolean;
@@ -41,7 +41,7 @@ const PieceContainer = styled.div<{
     }
 `;
 
-const PieceShape = styled.div<{ 
+const PieceShape = styled.div<{
     $color?: Color;
     $isSelected?: boolean;
     $bgColor: string;
@@ -56,8 +56,8 @@ const PieceShape = styled.div<{
     justify-content: center;
     align-items: center;
     transform: ${props => props.$color === Color.White ? 'rotate(180deg)' : 'none'};
-    box-shadow: ${props => props.$isSelected 
-        ? '0 0 0 3px #ffd700, 0 4px 8px rgba(0,0,0,0.3)' 
+    box-shadow: ${props => props.$isSelected
+        ? '0 0 0 3px #ffd700, 0 4px 8px rgba(0,0,0,0.3)'
         : '0 2px 4px rgba(0,0,0,0.2)'};
     transition: box-shadow 0.2s;
     position: relative;
@@ -87,39 +87,40 @@ const darkenColor = (color: string): string => {
     const r = parseInt(hex.substr(0, 2), 16);
     const g = parseInt(hex.substr(2, 2), 16);
     const b = parseInt(hex.substr(4, 2), 16);
-    
+
     const factor = 0.6;
     const newR = Math.floor(r * factor);
     const newG = Math.floor(g * factor);
     const newB = Math.floor(b * factor);
-    
+
     return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 };
 
 export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, isPossibleMove, isLastMove }) => {
     const [showTooltip, setShowTooltip] = useState(false);
-    const { style, colors } = usePieceStyle();
-    
-    if (!kind) {
+    const { getStyleForColor } = usePlayerStyle();
+
+    if (!kind || color === undefined) {
         return (
-            <PieceContainer 
-                $isSelected={isSelected} 
+            <PieceContainer
+                $isSelected={isSelected}
                 $isPossibleMove={isPossibleMove}
                 $isLastMove={isLastMove}
                 onClick={onClick}
             />
         );
     }
-    
-    const text = getPieceDisplay(kind, style);
+
+    const playerStyle = getStyleForColor(color);
+    const text = getPieceDisplay(kind, playerStyle.style);
     const isPromoted = promotedPieces.includes(kind);
-    const bgColor = isPromoted ? colors.promoted : colors.normal;
+    const bgColor = isPromoted ? playerStyle.colors.promoted : playerStyle.colors.normal;
     const borderColor = darkenColor(bgColor);
-    
+
     return (
-        <PieceContainer 
+        <PieceContainer
             $color={color}
-            $isSelected={isSelected} 
+            $isSelected={isSelected}
             $isPossibleMove={isPossibleMove}
             $isLastMove={isLastMove}
             $isPromoted={isPromoted}
@@ -127,8 +128,8 @@ export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, 
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
         >
-            <PieceShape 
-                $color={color} 
+            <PieceShape
+                $color={color}
                 $isSelected={isSelected}
                 $bgColor={bgColor}
                 $borderColor={borderColor}

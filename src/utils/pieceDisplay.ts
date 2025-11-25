@@ -1,5 +1,5 @@
 import type { Kind } from 'shogi.js';
-import type { PieceStyle } from '../contexts/PieceStyleContext';
+import type { PieceStyle } from '../contexts/PlayerStyleContext';
 
 // Classic Japanese characters
 export const classicMap: Record<string, string> = {
