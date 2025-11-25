@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { usePieceStyle } from '../contexts/PieceStyleContext';
 import type { PieceStyle } from '../contexts/PieceStyleContext';
+import WebApp from '@twa-dev/sdk';
 
 const SelectorContainer = styled.div`
     position: relative;
@@ -41,11 +42,11 @@ const Dropdown = styled.div`
 const DropdownItem = styled.button<{ $selected?: boolean }>`
     width: 100%;
     padding: 12px 16px;
-    background-color: ${props => props.$selected 
-        ? 'var(--tg-theme-button-color, #2481cc)' 
+    background-color: ${props => props.$selected
+        ? 'var(--tg-theme-button-color, #2481cc)'
         : 'transparent'};
-    color: ${props => props.$selected 
-        ? 'var(--tg-theme-button-text-color, #ffffff)' 
+    color: ${props => props.$selected
+        ? 'var(--tg-theme-button-text-color, #ffffff)'
         : 'var(--tg-theme-text-color, #000000)'};
     border: none;
     text-align: left;
@@ -54,9 +55,9 @@ const DropdownItem = styled.button<{ $selected?: boolean }>`
     transition: background-color 0.2s;
     
     &:hover {
-        background-color: ${props => props.$selected 
-            ? 'var(--tg-theme-button-color, #2481cc)' 
-            : 'rgba(0, 0, 0, 0.05)'};
+        background-color: ${props => props.$selected
+        ? 'var(--tg-theme-button-color, #2481cc)'
+        : 'rgba(0, 0, 0, 0.05)'};
     }
 `;
 
@@ -72,6 +73,7 @@ export const StyleSelector: React.FC = () => {
 
     const handleSelect = (newStyle: PieceStyle) => {
         setStyle(newStyle);
+        WebApp.HapticFeedback.selectionChanged();
         setIsOpen(false);
     };
 
@@ -80,7 +82,7 @@ export const StyleSelector: React.FC = () => {
             <SelectorButton onClick={() => setIsOpen(!isOpen)}>
                 Estilo: {styleLabels[style]} ▼
             </SelectorButton>
-            
+
             {isOpen && (
                 <Dropdown>
                     {(Object.keys(styleLabels) as PieceStyle[]).map(s => (

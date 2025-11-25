@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { usePieceStyle, colorPresets, colorLabels } from '../contexts/PieceStyleContext';
+import WebApp from '@twa-dev/sdk';
 
 const SelectorContainer = styled.div`
     position: relative;
@@ -42,11 +43,11 @@ const Dropdown = styled.div`
 const DropdownItem = styled.button<{ $selected?: boolean }>`
     width: 100%;
     padding: 12px 16px;
-    background-color: ${props => props.$selected 
-        ? 'var(--tg-theme-button-color, #2481cc)' 
+    background-color: ${props => props.$selected
+        ? 'var(--tg-theme-button-color, #2481cc)'
         : 'transparent'};
-    color: ${props => props.$selected 
-        ? 'var(--tg-theme-button-text-color, #ffffff)' 
+    color: ${props => props.$selected
+        ? 'var(--tg-theme-button-text-color, #ffffff)'
         : 'var(--tg-theme-text-color, #000000)'};
     border: none;
     text-align: left;
@@ -58,9 +59,9 @@ const DropdownItem = styled.button<{ $selected?: boolean }>`
     gap: 10px;
     
     &:hover {
-        background-color: ${props => props.$selected 
-            ? 'var(--tg-theme-button-color, #2481cc)' 
-            : 'rgba(0, 0, 0, 0.05)'};
+        background-color: ${props => props.$selected
+        ? 'var(--tg-theme-button-color, #2481cc)'
+        : 'rgba(0, 0, 0, 0.05)'};
     }
 `;
 
@@ -83,6 +84,7 @@ export const ColorSelector: React.FC = () => {
 
     const handleSelect = (preset: string) => {
         setColorPreset(preset);
+        WebApp.HapticFeedback.selectionChanged();
         setIsOpen(false);
     };
 
@@ -91,7 +93,7 @@ export const ColorSelector: React.FC = () => {
             <SelectorButton onClick={() => setIsOpen(!isOpen)}>
                 Color ▼
             </SelectorButton>
-            
+
             {isOpen && (
                 <Dropdown>
                     {Object.keys(colorPresets).map(preset => (
@@ -100,7 +102,7 @@ export const ColorSelector: React.FC = () => {
                             $selected={preset === currentColorPreset}
                             onClick={() => handleSelect(preset)}
                         >
-                            <ColorPreview 
+                            <ColorPreview
                                 $normal={colorPresets[preset].normal}
                                 $promoted={colorPresets[preset].promoted}
                             >

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Shogi, Color, Piece } from 'shogi.js';
 import type { Kind, IMove } from 'shogi.js';
+import WebApp from '@twa-dev/sdk';
 
 export interface GameState {
     board: Piece[][];
@@ -37,7 +38,7 @@ export const useShogiGame = () => {
         const promotionZone = color === Color.Black ? [1, 2, 3] : [7, 8, 9];
         const fromInZone = promotionZone.includes(fromY);
         const toInZone = promotionZone.includes(toY);
-        
+
         // Promotion is possible if entering or leaving the zone
         return (!fromInZone && toInZone) || (fromInZone && toInZone) || (fromInZone && !toInZone);
     };
@@ -51,11 +52,14 @@ export const useShogiGame = () => {
     const executeMove = (fromX: number, fromY: number, toX: number, toY: number, promote: boolean) => {
         try {
             shogi.move(fromX, fromY, toX, toY, promote);
+            // Haptic feedback on successful move
+            WebApp.HapticFeedback.impactOccurred('medium');
             setSelected(null);
             setPossibleMoves([]);
             forceUpdate();
         } catch (e) {
             console.error("Move failed", e);
+            WebApp.HapticFeedback.notificationOccurred('error');
         }
     };
 
@@ -86,13 +90,13 @@ export const useShogiGame = () => {
             try {
                 if ('x' in selected) {
                     const move = possibleMoves.find(m => m.to.x === x && m.to.y === y);
-                    
+
                     if (move) {
                         const fromPiece = shogi.get(selected.x, selected.y);
-                        
+
                         // Check if this is a promotion move and piece can be promoted
-                        if (fromPiece && 
-                            canPromote(fromPiece.kind) && 
+                        if (fromPiece &&
+                            canPromote(fromPiece.kind) &&
                             isPromotionMove(selected.y, y, shogi.turn)) {
                             // Ask for promotion
                             setPendingPromotion({
@@ -112,6 +116,8 @@ export const useShogiGame = () => {
                 } else {
                     // Drop piece - no promotion for drops
                     shogi.drop(x, y, selected.kind!);
+                    // Haptic feedback on successful drop
+                    WebApp.HapticFeedback.impactOccurred('medium');
                     setSelected(null);
                     setPossibleMoves([]);
                     forceUpdate();
@@ -129,7 +135,7 @@ export const useShogiGame = () => {
 
     const handleHandClick = (kind: Kind, color: Color) => {
         if (color !== shogi.turn) return;
-        
+
         if (selected && !('x' in selected) && selected.kind === kind) {
             setSelected(null);
             setPossibleMoves([]);
@@ -146,6 +152,8 @@ export const useShogiGame = () => {
         setSelected(null);
         setPossibleMoves([]);
         setPendingPromotion(null);
+        // Haptic feedback on game reset
+        WebApp.HapticFeedback.impactOccurred('light');
         forceUpdate();
     };
 

@@ -84,25 +84,52 @@ const GameArea = styled.div`
 `;
 
 function App() {
-  const { 
-    board, 
-    hands, 
-    turn, 
-    selected, 
+  const {
+    board,
+    hands,
+    turn,
+    selected,
     possibleMoves,
     pendingPromotion,
-    handleBoardClick, 
+    handleBoardClick,
     handleHandClick,
     handlePromotionChoice,
-    resetGame 
+    resetGame
   } = useShogiGame();
 
   useEffect(() => {
+    // Initialize Telegram Web App
     WebApp.ready();
     WebApp.expand();
-    
-    // Set header color
+
+    // Configure appearance
     WebApp.setHeaderColor(WebApp.themeParams.bg_color || '#ffffff');
+    WebApp.setBackgroundColor(WebApp.themeParams.bg_color || '#ffffff');
+
+    // Enable close confirmation to prevent accidental exits
+    WebApp.enableClosingConfirmation();
+
+    // Configure viewport for better mobile experience
+    if (WebApp.isVersionAtLeast('6.1')) {
+      WebApp.disableVerticalSwipes();
+    }
+
+    // Show back button
+    WebApp.BackButton.show();
+
+    // Handle back button click
+    const handleBackButton = () => {
+      if (window.confirm('¿Estás seguro de que quieres salir del juego?')) {
+        WebApp.close();
+      }
+    };
+
+    WebApp.BackButton.onClick(handleBackButton);
+
+    // Cleanup
+    return () => {
+      WebApp.BackButton.offClick(handleBackButton);
+    };
   }, []);
 
   return (
@@ -120,25 +147,25 @@ function App() {
 
         <GameArea>
           {/* Opponent Hand (White/Gote) */}
-          <Hand 
-            hands={hands} 
-            color={Color.White} 
-            onPieceClick={handleHandClick} 
+          <Hand
+            hands={hands}
+            color={Color.White}
+            onPieceClick={handleHandClick}
             selected={selected && !('x' in selected) ? selected : null}
           />
 
-          <Board 
-            board={board} 
-            onSquareClick={handleBoardClick} 
+          <Board
+            board={board}
+            onSquareClick={handleBoardClick}
             selected={selected && 'x' in selected ? selected : null}
             possibleMoves={possibleMoves}
           />
 
           {/* My Hand (Black/Sente) */}
-          <Hand 
-            hands={hands} 
-            color={Color.Black} 
-            onPieceClick={handleHandClick} 
+          <Hand
+            hands={hands}
+            color={Color.Black}
+            onPieceClick={handleHandClick}
             selected={selected && !('x' in selected) ? selected : null}
           />
         </GameArea>
