@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, type ReactNode } from 'react';
 
 export type PieceStyle = 'classic' | 'english' | 'symbols';
 
@@ -56,12 +56,12 @@ export const PieceStyleProvider: React.FC<{ children: ReactNode }> = ({ children
     };
 
     return (
-        <PieceStyleContext.Provider value={{ 
-            style, 
-            setStyle, 
-            colors, 
+        <PieceStyleContext.Provider value={{
+            style,
+            setStyle,
+            colors,
             setColorPreset,
-            currentColorPreset 
+            currentColorPreset
         }}>
             {children}
         </PieceStyleContext.Provider>
