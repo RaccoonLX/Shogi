@@ -142,6 +142,23 @@ const TurnIndicator = styled.div`
 `;
 
 function App() {
+  const [view, setView] = useState<'menu' | 'waiting' | 'game'>('menu');
+  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
+  const [playerColor, setPlayerColor] = useState<Color | null>(null);
+  const [gameToken, setGameToken] = useState<string | null>(null);
+  const [lastMoveIndex, setLastMoveIndex] = useState<number>(0);
+
+  const handleMove = async (move: any, board: any[][], hands: any[][]) => {
+    if (gameMode === 'multiplayer' && gameToken) {
+      try {
+        await api.submitMove(gameToken, move, board, hands);
+      } catch (e) {
+        console.error('Error submitting move:', e);
+        alert('Error submitting move. Please try again.');
+      }
+    }
+  };
+
   const {
     board,
     hands,
@@ -152,16 +169,12 @@ function App() {
     handleBoardClick,
     handleHandClick,
     handlePromotionChoice,
-    resetGame
-  } = useShogiGame();
+    resetGame,
+    applyMove
+  } = useShogiGame(handleMove);
 
   const [whiteControlsExpanded, setWhiteControlsExpanded] = useState(false);
   const [blackControlsExpanded, setBlackControlsExpanded] = useState(false);
-
-  const [view, setView] = useState<'menu' | 'waiting' | 'game'>('menu');
-  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
-  const [playerColor, setPlayerColor] = useState<Color | null>(null);
-  const [gameToken, setGameToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -194,12 +207,6 @@ function App() {
           resetGame();
         }
       } else if (view === 'waiting') {
-        // Cancel waiting
-        // We can't easily call handleCancelGame here because it's async and inside useEffect, 
-        // but we can just close app or return to menu.
-        // For now, let's just close app if not in game, or maybe return to menu if in waiting?
-        // Spec says "Exit/Menu" button in game.
-        // Let's stick to default close behavior or confirm exit.
         if (window.confirm('¿Salir de la aplicación?')) {
           WebApp.close();
         }
@@ -214,20 +221,35 @@ function App() {
     return () => {
       WebApp.BackButton.offClick(handleBackButton);
     };
-  }, [view, resetGame]); // Added dependencies
+  }, [view, resetGame]);
 
   // Polling effect
   useEffect(() => {
     let interval: any;
-    if (view === 'waiting' && gameToken) {
+    if (gameToken) {
       interval = setInterval(async () => {
         try {
-          const { status } = await api.checkStatus(gameToken);
-          if (status === 'active') {
+          const gameState = await api.getGameState(gameToken);
+
+          if (view === 'waiting' && gameState.status === 'active') {
             setGameMode('multiplayer');
             setPlayerColor(Color.Black); // Creator is Black (Sente)
             setView('game');
             resetGame();
+          } else if (view === 'game' && gameState.status === 'active') {
+            // Check for new moves
+            if (gameState.moves.length > lastMoveIndex) {
+              const newMoves = gameState.moves.slice(lastMoveIndex);
+              newMoves.forEach(move => {
+                const moveColor = move.color; // 0 for Black, 1 for White
+                const myColorCode = playerColor === Color.Black ? 0 : 1;
+
+                if (moveColor !== myColorCode) {
+                  applyMove(move);
+                }
+              });
+              setLastMoveIndex(gameState.moves.length);
+            }
           }
         } catch (e) {
           console.error(e);
@@ -235,7 +257,7 @@ function App() {
       }, 2000);
     }
     return () => clearInterval(interval as any);
-  }, [view, gameToken, resetGame]);
+  }, [view, gameToken, resetGame, lastMoveIndex, playerColor, applyMove]);
 
   const handleCreateGame = async () => {
     try {
@@ -291,6 +313,8 @@ function App() {
     handleHandClick(piece, color);
   };
 
+  const isFlipped = gameMode === 'multiplayer' && playerColor === Color.White;
+
   return (
     <>
       <GlobalStyle />
@@ -325,60 +349,119 @@ function App() {
           </TopPanel>
 
           <GameArea>
-            {/* White Player Controls */}
-            <PlayerControls $isExpanded={whiteControlsExpanded}>
-              <PlayerHeader
-                $player={Color.White}
-                onClick={() => setWhiteControlsExpanded(!whiteControlsExpanded)}
-              >
-                <PlayerIcon>⚪</PlayerIcon>
-                White (Gote)
-                <ExpandIcon $isExpanded={whiteControlsExpanded}>▼</ExpandIcon>
-              </PlayerHeader>
-              <ControlsContent $isExpanded={whiteControlsExpanded}>
-                <StyleSelector player={Color.White} />
-                <ColorSelector player={Color.White} />
-              </ControlsContent>
-            </PlayerControls>
+            {/* Top Player (Opponent) */}
+            {isFlipped ? (
+              // If flipped (I am White), show Black (Opponent) at top
+              <>
+                <PlayerControls $isExpanded={blackControlsExpanded}>
+                  <PlayerHeader
+                    $player={Color.Black}
+                    onClick={() => setBlackControlsExpanded(!blackControlsExpanded)}
+                  >
+                    <PlayerIcon>⚫</PlayerIcon>
+                    Black (Sente)
+                    <ExpandIcon $isExpanded={blackControlsExpanded}>▼</ExpandIcon>
+                  </PlayerHeader>
+                  <ControlsContent $isExpanded={blackControlsExpanded}>
+                    <StyleSelector player={Color.Black} />
+                    <ColorSelector player={Color.Black} />
+                  </ControlsContent>
+                </PlayerControls>
 
-            {/* White Hand */}
-            <Hand
-              hands={hands}
-              color={Color.White}
-              onPieceClick={onHandClick}
-              selected={selected && !('x' in selected) ? selected : null}
-            />
+                <Hand
+                  hands={hands}
+                  color={Color.Black}
+                  onPieceClick={onHandClick}
+                  selected={selected && !('x' in selected) ? selected : null}
+                />
+              </>
+            ) : (
+              // If not flipped (I am Black or Solo), show White (Opponent) at top
+              <>
+                <PlayerControls $isExpanded={whiteControlsExpanded}>
+                  <PlayerHeader
+                    $player={Color.White}
+                    onClick={() => setWhiteControlsExpanded(!whiteControlsExpanded)}
+                  >
+                    <PlayerIcon>⚪</PlayerIcon>
+                    White (Gote)
+                    <ExpandIcon $isExpanded={whiteControlsExpanded}>▼</ExpandIcon>
+                  </PlayerHeader>
+                  <ControlsContent $isExpanded={whiteControlsExpanded}>
+                    <StyleSelector player={Color.White} />
+                    <ColorSelector player={Color.White} />
+                  </ControlsContent>
+                </PlayerControls>
+
+                <Hand
+                  hands={hands}
+                  color={Color.White}
+                  onPieceClick={onHandClick}
+                  selected={selected && !('x' in selected) ? selected : null}
+                />
+              </>
+            )}
 
             <Board
               board={board}
               onSquareClick={onBoardClick}
               selected={selected && 'x' in selected ? selected : null}
               possibleMoves={possibleMoves}
+              flipped={isFlipped}
             />
 
-            {/* Black Hand */}
-            <Hand
-              hands={hands}
-              color={Color.Black}
-              onPieceClick={onHandClick}
-              selected={selected && !('x' in selected) ? selected : null}
-            />
+            {/* Bottom Player (Me) */}
+            {isFlipped ? (
+              // If flipped (I am White), show White (Me) at bottom
+              <>
+                <Hand
+                  hands={hands}
+                  color={Color.White}
+                  onPieceClick={onHandClick}
+                  selected={selected && !('x' in selected) ? selected : null}
+                />
 
-            {/* Black Player Controls */}
-            <PlayerControls $isExpanded={blackControlsExpanded}>
-              <PlayerHeader
-                $player={Color.Black}
-                onClick={() => setBlackControlsExpanded(!blackControlsExpanded)}
-              >
-                <PlayerIcon>⚫</PlayerIcon>
-                Black (Sente)
-                <ExpandIcon $isExpanded={blackControlsExpanded}>▼</ExpandIcon>
-              </PlayerHeader>
-              <ControlsContent $isExpanded={blackControlsExpanded}>
-                <StyleSelector player={Color.Black} />
-                <ColorSelector player={Color.Black} />
-              </ControlsContent>
-            </PlayerControls>
+                <PlayerControls $isExpanded={whiteControlsExpanded}>
+                  <PlayerHeader
+                    $player={Color.White}
+                    onClick={() => setWhiteControlsExpanded(!whiteControlsExpanded)}
+                  >
+                    <PlayerIcon>⚪</PlayerIcon>
+                    White (Gote)
+                    <ExpandIcon $isExpanded={whiteControlsExpanded}>▼</ExpandIcon>
+                  </PlayerHeader>
+                  <ControlsContent $isExpanded={whiteControlsExpanded}>
+                    <StyleSelector player={Color.White} />
+                    <ColorSelector player={Color.White} />
+                  </ControlsContent>
+                </PlayerControls>
+              </>
+            ) : (
+              // If not flipped (I am Black or Solo), show Black (Me) at bottom
+              <>
+                <Hand
+                  hands={hands}
+                  color={Color.Black}
+                  onPieceClick={onHandClick}
+                  selected={selected && !('x' in selected) ? selected : null}
+                />
+
+                <PlayerControls $isExpanded={blackControlsExpanded}>
+                  <PlayerHeader
+                    $player={Color.Black}
+                    onClick={() => setBlackControlsExpanded(!blackControlsExpanded)}
+                  >
+                    <PlayerIcon>⚫</PlayerIcon>
+                    Black (Sente)
+                    <ExpandIcon $isExpanded={blackControlsExpanded}>▼</ExpandIcon>
+                  </PlayerHeader>
+                  <ControlsContent $isExpanded={blackControlsExpanded}>
+                    <StyleSelector player={Color.Black} />
+                    <ColorSelector player={Color.Black} />
+                  </ControlsContent>
+                </PlayerControls>
+              </>
+            )}
           </GameArea>
 
           {/* Promotion Dialog */}

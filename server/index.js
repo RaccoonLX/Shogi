@@ -33,7 +33,14 @@ app.post('/api/create', (req, res) => {
   do {
     token = generateToken();
   } while (tokens.has(token));
-  tokens.set(token, { status: 'waiting' });
+  // Initialize game with status, empty moves list, and starting turn
+  tokens.set(token, { 
+    status: 'waiting',
+    moves: [],
+    turn: 0, // 0 for Black, 1 for White
+    board: null,
+    hands: null
+  });
   console.log('Created token:', token);
   res.json({ token });
 });
@@ -53,7 +60,41 @@ app.post('/api/join', (req, res) => {
   res.json({ success: true });
 });
 
-// Check status of a token
+// Get full game state (status, moves, turn, board, hands)
+app.get('/api/game/:token', (req, res) => {
+  const { token } = req.params;
+  if (!tokens.has(token)) {
+    return res.status(404).json({ error: 'Token not found' });
+  }
+  const game = tokens.get(token);
+  res.json(game);
+});
+
+// Submit a move and update board state
+app.post('/api/move', (req, res) => {
+  const { token, move, board, hands } = req.body;
+  if (!token || !tokens.has(token)) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+  
+  const game = tokens.get(token);
+  if (game.status !== 'active') {
+    return res.status(400).json({ error: 'Game not active' });
+  }
+
+  // Add move to history and update turn
+  game.moves.push(move);
+  game.turn = game.turn === 0 ? 1 : 0; // Toggle turn
+  
+  // Update board and hands state
+  if (board) game.board = board;
+  if (hands) game.hands = hands;
+  
+  tokens.set(token, game);
+  res.json({ success: true, turn: game.turn });
+});
+
+// Check status of a token (kept for backward compatibility or simple status checks)
 app.get('/api/status/:token', (req, res) => {
   const { token } = req.params;
   if (!tokens.has(token)) {

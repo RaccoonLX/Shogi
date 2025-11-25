@@ -19,7 +19,7 @@ interface PendingMove {
     toY: number;
 }
 
-export const useShogiGame = () => {
+export const useShogiGame = (onMove?: (move: any, board: Piece[][], hands: Piece[][]) => void) => {
     const [shogi] = useState(() => new Shogi());
     const [, setVersion] = useState(0);
     const [selected, setSelected] = useState<GameState['selected']>(null);
@@ -57,6 +57,14 @@ export const useShogiGame = () => {
             setSelected(null);
             setPossibleMoves([]);
             forceUpdate();
+
+            if (onMove) {
+                onMove({
+                    type: 'move',
+                    fromX, fromY, toX, toY, promote,
+                    color: shogi.turn === Color.Black ? 1 : 0 // The turn has already flipped, so previous turn was the mover
+                }, shogi.board, shogi.hands);
+            }
         } catch (e) {
             console.error("Move failed", e);
             WebApp.HapticFeedback.notificationOccurred('error');
@@ -118,6 +126,16 @@ export const useShogiGame = () => {
                     shogi.drop(x, y, selected.kind!);
                     // Haptic feedback on successful drop
                     WebApp.HapticFeedback.impactOccurred('medium');
+
+                    if (onMove) {
+                        onMove({
+                            type: 'drop',
+                            toX: x, toY: y,
+                            kind: selected.kind,
+                            color: shogi.turn // Drop happens before turn flip? No, shogi.drop flips turn.
+                        }, shogi.board, shogi.hands);
+                    }
+
                     setSelected(null);
                     setPossibleMoves([]);
                     forceUpdate();
@@ -157,6 +175,20 @@ export const useShogiGame = () => {
         forceUpdate();
     };
 
+    const applyMove = (move: any) => {
+        try {
+            if (move.type === 'move') {
+                shogi.move(move.fromX, move.fromY, move.toX, move.toY, move.promote);
+            } else if (move.type === 'drop') {
+                shogi.drop(move.toX, move.toY, move.kind);
+            }
+            WebApp.HapticFeedback.impactOccurred('medium');
+            forceUpdate();
+        } catch (e) {
+            console.error("Failed to apply remote move", e);
+        }
+    };
+
     return {
         board: shogi.board,
         hands: shogi.hands,
@@ -168,6 +200,7 @@ export const useShogiGame = () => {
         handleHandClick,
         handlePromotionChoice,
         resetGame,
+        applyMove,
         shogi
     };
 };

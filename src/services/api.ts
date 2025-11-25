@@ -35,4 +35,20 @@ export const api = {
         if (!response.ok) throw new Error('Failed to cancel game');
         return response.json();
     },
+
+    getGameState: async (token: string): Promise<{ status: string; moves: any[]; turn: number; board?: any[][]; hands?: any[][] }> => {
+        const response = await fetch(`${API_URL}/api/game/${token}`);
+        if (!response.ok) throw new Error('Failed to get game state');
+        return response.json();
+    },
+
+    submitMove: async (token: string, move: any, board: any[][], hands: any[][]): Promise<{ success: boolean; turn: number }> => {
+        const response = await fetch(`${API_URL}/api/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, move, board, hands }),
+        });
+        if (!response.ok) throw new Error('Failed to submit move');
+        return response.json();
+    },
 };

@@ -13,6 +13,7 @@ interface PieceProps {
     isSelected?: boolean;
     isPossibleMove?: boolean;
     isLastMove?: boolean;
+    flipped?: boolean;
 }
 
 const PieceContainer = styled.div<{
@@ -67,13 +68,13 @@ const PieceShape = styled.div<{
     }
 `;
 
-const PieceText = styled.span<{ $color?: Color; $isPromoted?: boolean }>`
+const PieceText = styled.span<{ $color?: Color; $isPromoted?: boolean; $flipped?: boolean }>`
     font-family: 'Noto Serif JP', serif;
     font-size: 1.2rem;
     font-weight: bold;
     user-select: none;
     color: ${props => props.$isPromoted ? '#ffffff' : '#000000'};
-    transform: ${props => props.$color === Color.White ? 'rotate(180deg)' : 'none'};
+    transform: ${props => (props.$color === Color.White) !== !!props.$flipped ? 'rotate(180deg)' : 'none'};
     text-shadow: ${props => props.$isPromoted ? '1px 1px 2px rgba(0,0,0,0.5)' : 'none'};
 `;
 
@@ -96,7 +97,7 @@ const darkenColor = (color: string): string => {
     return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 };
 
-export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, isPossibleMove, isLastMove }) => {
+export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, isPossibleMove, isLastMove, flipped }) => {
     const [showTooltip, setShowTooltip] = useState(false);
     const { getStyleForColor } = usePlayerStyle();
 
@@ -134,7 +135,7 @@ export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, 
                 $bgColor={bgColor}
                 $borderColor={borderColor}
             >
-                <PieceText $color={color} $isPromoted={isPromoted}>
+                <PieceText $color={color} $isPromoted={isPromoted} $flipped={flipped}>
                     {text}
                 </PieceText>
             </PieceShape>
