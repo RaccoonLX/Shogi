@@ -1,34 +1,71 @@
-import ffishModule from 'ffish';
-
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
 
 export class USIEngine {
-    private ffish: any = null;
-    private board: any = null;
+    private worker: Worker | null = null;
     private difficulty: AIDifficulty = 'medium';
     private isReady: boolean = false;
+    private initializationPromise: Promise<void> | null = null;
+    private currentSearchResolve: ((move: string | null) => void) | null = null;
 
     async initialize(): Promise<void> {
-        try {
-            console.log('Initializing ffish module...');
+        if (this.isReady) return;
+        if (this.initializationPromise) return this.initializationPromise;
 
-            // Load the ffish WebAssembly module with locateFile option
-            this.ffish = await ffishModule({
-                locateFile: (file: string) => {
-                    // Point to the WASM file in the public directory
-                    return `/Shogi/${file}`;
-                }
-            });
-            console.log('ffish module loaded successfully');
+        this.initializationPromise = new Promise((resolve, reject) => {
+            console.log('Initializing USI Engine Worker...');
 
-            // Create a new Shogi board
-            this.board = new this.ffish.Board('shogi');
-            this.isReady = true;
-            console.log('USI Engine initialized');
-        } catch (error) {
-            console.error('Failed to initialize USI engine:', error);
-            throw error;
-        }
+            try {
+                // Instantiate the worker
+                // We use type: 'module' because Vite outputs ESM workers
+                this.worker = new Worker(new URL('../workers/usiWorker.ts', import.meta.url), {
+                    type: 'module'
+                });
+
+                this.worker.onmessage = (e) => {
+                    const msg = e.data;
+                    switch (msg.type) {
+                        case 'ready':
+                            console.log('USI Engine Worker is ready');
+                            this.isReady = true;
+                            resolve();
+                            break;
+                        case 'bestmove':
+                            console.log('Received bestmove from worker:', msg.move);
+                            if (this.currentSearchResolve) {
+                                this.currentSearchResolve(msg.move === 'resign' ? null : msg.move);
+                                this.currentSearchResolve = null;
+                            }
+                            break;
+                        case 'error':
+                            console.error('Worker error:', msg.message);
+                            if (!this.isReady) {
+                                reject(new Error(msg.message));
+                            }
+                            break;
+                        case 'log':
+                            console.log(msg.message);
+                            break;
+                    }
+                };
+
+                this.worker.onerror = (e) => {
+                    console.error('Worker error event:', e);
+                    console.error('Worker error message:', e.message);
+                    console.error('Worker error filename:', e.filename);
+                    console.error('Worker error lineno:', e.lineno);
+                    reject(new Error(`Worker error: ${e.message} at ${e.filename}:${e.lineno}`));
+                };
+
+                // Send init command
+                this.worker.postMessage({ type: 'init' });
+
+            } catch (error) {
+                console.error('Failed to create worker:', error);
+                reject(error);
+            }
+        });
+
+        return this.initializationPromise;
     }
 
     setDifficulty(difficulty: AIDifficulty): void {
@@ -36,34 +73,28 @@ export class USIEngine {
     }
 
     async getBestMove(sfen: string): Promise<string | null> {
-        if (!this.isReady || !this.ffish || !this.board) {
+        if (!this.isReady || !this.worker) {
             console.error('Engine not ready');
             return null;
         }
 
-        try {
-            // Set the position from SFEN
-            this.board.setSfen(sfen);
-
-            // Get search depth based on difficulty
-            const depth = this.getDepthForDifficulty();
-
-            console.log(`Getting best move with depth ${depth} for position: ${sfen}`);
-
-            // Get the best move
-            const move = this.board.bestMove(depth);
-
-            if (!move) {
-                console.log('No legal moves available');
-                return null;
-            }
-
-            console.log(`Best move found: ${move}`);
-            return move;
-        } catch (error) {
-            console.error('Error getting best move:', error);
-            return null;
+        // Cancel any pending search
+        if (this.currentSearchResolve) {
+            this.currentSearchResolve(null);
+            this.currentSearchResolve = null;
         }
+
+        return new Promise((resolve) => {
+            this.currentSearchResolve = resolve;
+
+            // Update position
+            this.worker!.postMessage({ type: 'set_sfen', sfen });
+
+            // Start search
+            const depth = this.getDepthForDifficulty();
+            console.log(`Requesting best move with depth ${depth} for position: ${sfen}`);
+            this.worker!.postMessage({ type: 'go', depth });
+        });
     }
 
     private getDepthForDifficulty(): number {
@@ -79,46 +110,23 @@ export class USIEngine {
         }
     }
 
-    getCurrentSfen(): string {
-        if (!this.board) {
-            return 'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1'; // Starting position
-        }
-        return this.board.sfen();
-    }
-
-    makeMove(move: string): boolean {
-        if (!this.board) {
-            console.error('Board not initialized');
-            return false;
-        }
-
-        try {
-            this.board.push(move);
-            return true;
-        } catch (error) {
-            console.error('Failed to make move:', error);
-            return false;
-        }
-    }
-
-    reset(): void {
-        if (this.board) {
-            this.board.reset();
-        }
-    }
-
     stop(): void {
-        // Clean up resources
-        if (this.board) {
-            this.board.delete();
-            this.board = null;
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
         }
         this.isReady = false;
+        this.initializationPromise = null;
+        this.currentSearchResolve = null;
     }
+
+    // Helper methods for move parsing (stateless, can remain here)
 
     // Convert USI move notation to our internal format
     parseUSIMove(usiMove: string): { fromX?: number; fromY?: number; toX: number; toY: number; promote: boolean; piece?: string } | null {
         try {
+            if (!usiMove) return null;
+
             // USI format examples:
             // "7g7f" - normal move from 7g to 7f
             // "7g7f+" - promoting move
@@ -163,40 +171,25 @@ export class USIEngine {
 
     // Parse square notation like "7g" to coordinates
     private parseSquare(square: string): { x: number; y: number } {
-        // USI uses format like "7g" where:
-        // - First char is file (9-1 from left to right)
-        // - Second char is rank (a-i from top to bottom)
-
         const file = parseInt(square[0]);
         const rank = square[1];
-
-        // Convert file: 9->1, 8->2, ..., 1->9
         const x = 10 - file;
-
-        // Convert rank: a->1, b->2, ..., i->9
         const y = rank.charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-
         return { x, y };
     }
 
     // Convert internal coordinates to USI square notation
     coordinatesToUSI(x: number, y: number): string {
-        // Convert x: 1->9, 2->8, ..., 9->1
         const file = 10 - x;
-
-        // Convert y: 1->a, 2->b, ..., 9->i
         const rank = String.fromCharCode('a'.charCodeAt(0) + y - 1);
-
         return `${file}${rank}`;
     }
 
     // Convert our move to USI format
     moveToUSI(fromX?: number, fromY?: number, toX?: number, toY?: number, promote: boolean = false, piece?: string): string {
         if (piece && toX !== undefined && toY !== undefined) {
-            // Drop move
             return `${piece}*${this.coordinatesToUSI(toX, toY)}`;
         } else if (fromX !== undefined && fromY !== undefined && toX !== undefined && toY !== undefined) {
-            // Regular move
             const from = this.coordinatesToUSI(fromX, fromY);
             const to = this.coordinatesToUSI(toX, toY);
             return `${from}${to}${promote ? '+' : ''}`;

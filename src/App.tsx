@@ -427,11 +427,16 @@ function App() {
 
               // If AI plays as Black (starts first), make AI move
               if (color === Color.White) {
-                setTimeout(() => makeAIMove(), 500);
+                // Small delay to let UI render
+                setTimeout(() => {
+                  makeAIMove();
+                }, 500);
               }
             } catch (error) {
               console.error('Failed to initialize AI:', error);
-              alert('Error al inicializar la IA. Por favor, recarga la página.');
+              alert('Error al inicializar la IA. Volviendo al menú principal.');
+              setView('menu');
+              setGameMode('solo');
             }
           }}
           onBack={() => setView('menu')}

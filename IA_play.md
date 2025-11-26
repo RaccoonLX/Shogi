@@ -1,0 +1,1 @@
+Cuando está el modo IA activo, el jugador no debe ser capáz de utilizar las fichas del oponente y debe ser la "IA" la que juegue con esas fichas durante su turno

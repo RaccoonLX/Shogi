@@ -1,39 +1,40 @@
-# Multiplayer Board Synchronization & Rotation
+# AI Integration Fix Walkthrough
 
-I have implemented real-time board synchronization, board rotation, and text orientation correction for versus mode.
+## Problem
+The `ffish` AI engine was failing to initialize with `TypeError: loadModule is not a function`. This was because `ffish.js` is an Emscripten-generated file that is not compatible with standard ES Module imports used by Vite, and it expects to run in a specific environment. Additionally, running it on the main thread would block the UI.
+
+## Solution
+1.  **Web Worker Implementation**: Moved the AI logic to a Web Worker (`src/workers/usiWorker.ts`) to prevent UI blocking.
+2.  **Custom Loading Strategy**: 
+    -   Since `ffish.js` is not a valid ESM module and `importScripts` is not supported in Module Workers (which Vite outputs), we implemented a `fetch` + `eval` strategy in the worker.
+    -   The worker fetches `ffish.js` from the public directory and executes it in the global scope.
+3.  **Engine Service Refactor**: Updated `src/services/usiEngine.ts` to instantiate the worker and manage communication via a message protocol (`init`, `set_sfen`, `go`, `bestmove`).
 
 ## Changes
 
-### Board Rotation & Text Orientation
-- **Piece Component (`src/components/Piece.tsx`)**:
-    - Added `flipped` prop.
-    - Adjusted text rotation logic: `transform: ${props => (props.$color === Color.White) !== !!props.$flipped ? 'rotate(180deg)' : 'none'}`.
-    - This ensures that for the local player (White in flipped view), the text on their pieces (which are physically rotated to point UP) remains upright and legible.
-- **Board Component (`src/components/Board.tsx`)**:
-    - Added `flipped` prop.
-    - When `flipped` is true:
-        - Renders from White's perspective (y: 9->1, x: 1->9).
-        - Rotates the piece container 180 degrees.
-        - Passes `flipped={true}` to the `Piece` component.
-- **App Component (`src/App.tsx`)**:
-    - Detects if the current player is White in multiplayer mode.
-    - Passes `flipped={true}` to the Board component.
-    - Swaps the UI layout so controls/hand are consistent with the player's position.
+### `src/workers/usiWorker.ts`
+Created a new worker file that:
+-   Defines the `Module` object required by Emscripten.
+-   Fetches `ffish.js` and executes it using `(0, eval)(scriptContent)`.
+-   Handles messages from the main thread to initialize the board, set position, and search for moves.
 
-### Board Synchronization
-- **Server (`server/index.js`)**: Stores full board matrix and hands state.
-- **Frontend Service (`src/services/api.ts`)**: Sends board/hands on move submission.
-- **Game Logic (`src/hooks/useShogiGame.ts`)**: Implements `onMove` callback and `applyMove` for syncing.
-- **Polling**: The app polls the server every 2 seconds for game state updates.
+### `src/services/usiEngine.ts`
+Refactored the `USIEngine` class to:
+-   Instantiate the worker using `new Worker(..., { type: 'module' })`.
+-   Send commands to the worker.
+-   Listen for `bestmove` and `ready` messages.
 
 ## Verification
-- **Solo Mode**: Board is standard (Black at bottom).
-- **Multiplayer (Black)**: Board is standard (Black at bottom).
-- **Multiplayer (White)**:
-    - Board is flipped (White pieces at bottom).
-    - White pieces point UP (away from player).
-    - Black pieces point DOWN (towards player).
-    - **Text on White pieces is UPRIGHT (legible).**
-    - **Text on Black pieces is UPSIDE DOWN (standard for opponent).**
-    - White Hand/Controls are at the bottom.
-    - Black Hand/Controls are at the top.
+-   **Initialization**: Confirmed via browser console logs that the worker initializes successfully:
+    ```
+    [log] Initializing USI Engine Worker...
+    [log] Worker: Loading script http://localhost:5176/Shogi/ffish.js
+    [log] Worker: ffish.js executed
+    [log] Worker: ffish runtime initialized
+    [log] USI Engine Worker is ready
+    ```
+-   **Architecture**: The AI now runs in a separate thread, ensuring the game UI remains responsive during calculations.
+
+## Next Steps
+-   The AI Game Mode is now ready for full gameplay testing.
+-   The `AIGameSetup` and `App` components are already set up to use the initialized engine.
