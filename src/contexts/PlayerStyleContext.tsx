@@ -53,6 +53,7 @@ interface PlayerStyleContextType {
     // Skins support
     availableSkins: Array<{ id: string, name: string, path: string }>;
     getSkinConfig: (styleId: string) => Record<string, string> | null;
+    getSkinPath: (styleId: string) => string | null;
 }
 
 const PlayerStyleContext = createContext<PlayerStyleContextType | undefined>(undefined);
@@ -125,6 +126,11 @@ export const PlayerStyleProvider: React.FC<{ children: ReactNode }> = ({ childre
         return skinConfigs[styleId] || null;
     };
 
+    const getSkinPath = (styleId: string): string | null => {
+        const skin = availableSkins.find(s => s.id === styleId);
+        return skin ? skin.path : null;
+    };
+
     return (
         <PlayerStyleContext.Provider value={{
             blackStyle,
@@ -136,7 +142,8 @@ export const PlayerStyleProvider: React.FC<{ children: ReactNode }> = ({ childre
             getStyleForColor,
             // Skins support
             availableSkins,
-            getSkinConfig
+            getSkinConfig,
+            getSkinPath
         }}>
             {children}
         </PlayerStyleContext.Provider>

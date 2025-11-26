@@ -99,7 +99,7 @@ const darkenColor = (color: string): string => {
 
 export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, isPossibleMove, isLastMove, flipped }) => {
     const [showTooltip, setShowTooltip] = useState(false);
-    const { getStyleForColor, getSkinConfig } = usePlayerStyle();
+    const { getStyleForColor, getSkinConfig, getSkinPath } = usePlayerStyle();
 
     if (!kind || color === undefined) {
         return (
@@ -134,13 +134,15 @@ export const Piece: React.FC<PieceProps> = ({ kind, color, onClick, isSelected, 
         >
             {isCustomSkin && imageFile ? (
                 <img
-                    src={`${import.meta.env.BASE_URL}skins/${playerStyle.style}/${imageFile}`}
+                    src={`${import.meta.env.BASE_URL}skins/${getSkinPath(playerStyle.style)}/${imageFile}`}
                     alt={kind}
                     style={{
                         width: '100%',
                         height: '100%',
-                        transform: flipped ? 'rotate(180deg)' : 'none',
+                        transform: color === Color.White ? 'rotate(180deg)' : 'none',
                         objectFit: 'contain',
+                        position: 'relative',
+                        zIndex: 2
                     }}
                 />
             ) : (
