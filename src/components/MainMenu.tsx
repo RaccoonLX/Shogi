@@ -41,11 +41,12 @@ const Input = styled.input`
 
 interface MainMenuProps {
   onPlaySolo: () => void;
+  onPlayAI: () => void;
   onCreateGame: () => void;
   onJoinGame: (token: string) => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onPlaySolo, onCreateGame, onJoinGame }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onPlaySolo, onPlayAI, onCreateGame, onJoinGame }) => {
   const [joinToken, setJoinToken] = useState('');
 
   const handleJoin = () => {
@@ -60,6 +61,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onPlaySolo, onCreateGame, on
     <Container>
       <Title>Shogi</Title>
       <Button onClick={onPlaySolo}>♟️ Jugar en Solitario</Button>
+      <Button onClick={onPlayAI}>🤖 Jugar contra la IA</Button>
       <Button onClick={onCreateGame}>🤝 Desafiar a un Amigo</Button>
       <div>
         <Input

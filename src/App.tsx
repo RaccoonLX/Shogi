@@ -10,7 +10,9 @@ import { ColorSelector } from './components/ColorSelector';
 import { Color } from 'shogi.js';
 import { MainMenu } from './components/MainMenu';
 import { WaitingRoom } from './components/WaitingRoom';
+import { AIGameSetup } from './components/AIGameSetup';
 import { api } from './services/api';
+import { usiEngine } from './services/usiEngine';
 
 const GlobalStyle = createGlobalStyle`
   body {
@@ -142,11 +144,12 @@ const TurnIndicator = styled.div`
 `;
 
 function App() {
-  const [view, setView] = useState<'menu' | 'waiting' | 'game'>('menu');
-  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
+  const [view, setView] = useState<'menu' | 'waiting' | 'game' | 'ai-setup'>('menu');
+  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer' | 'ai'>('solo');
   const [playerColor, setPlayerColor] = useState<Color | null>(null);
   const [gameToken, setGameToken] = useState<string | null>(null);
   const [lastMoveIndex, setLastMoveIndex] = useState<number>(0);
+  const [isAIThinking, setIsAIThinking] = useState<boolean>(false);
 
   const handleMove = async (move: any, board: any[][], hands: any[][]) => {
     if (gameMode === 'multiplayer' && gameToken) {
@@ -170,11 +173,86 @@ function App() {
     handleHandClick,
     handlePromotionChoice,
     resetGame,
-    applyMove
+    applyMove,
+    shogi
   } = useShogiGame(handleMove);
 
   const [whiteControlsExpanded, setWhiteControlsExpanded] = useState(false);
   const [blackControlsExpanded, setBlackControlsExpanded] = useState(false);
+
+  // Function to make AI move
+  const makeAIMove = async () => {
+    if (gameMode !== 'ai' || !playerColor || isAIThinking) return;
+
+    // Determine AI's color (opposite of player)
+    const isPlayerBlack = playerColor === Color.Black;
+    if (isPlayerBlack && turn !== Color.White) return;
+    if (!isPlayerBlack && turn !== Color.Black) return;
+
+    setIsAIThinking(true);
+
+    try {
+      // Get current position from the ffish engine's board
+      const currentSfen = usiEngine.getCurrentSfen();
+      console.log('Current SFEN:', currentSfen);
+
+      // Get best move from AI
+      const bestMove = await usiEngine.getBestMove(currentSfen);
+
+      if (!bestMove) {
+        console.error('No move returned from AI');
+        setIsAIThinking(false);
+        return;
+      }
+
+      console.log('AI best move:', bestMove);
+
+      // Parse the USI move
+      const parsedMove = usiEngine.parseUSIMove(bestMove);
+
+      if (!parsedMove) {
+        console.error('Failed to parse AI move:', bestMove);
+        setIsAIThinking(false);
+        return;
+      }
+
+      console.log('Parsed move:', parsedMove);
+
+      // Apply the move to both boards
+      if (parsedMove.piece) {
+        // Drop move
+        shogi.drop(parsedMove.toX, parsedMove.toY, parsedMove.piece as any);
+        usiEngine.makeMove(bestMove);
+      } else if (parsedMove.fromX !== undefined && parsedMove.fromY !== undefined) {
+        // Regular move
+        shogi.move(parsedMove.fromX, parsedMove.fromY, parsedMove.toX, parsedMove.toY, parsedMove.promote);
+        usiEngine.makeMove(bestMove);
+      }
+
+      // Force update to reflect the AI move
+      // Don't call resetGame, just force update
+      setIsAIThinking(false);
+      setIsAIThinking(true); // Trigger re-render
+    } catch (error) {
+      console.error('Error making AI move:', error);
+    } finally {
+      setIsAIThinking(false);
+    }
+  };
+
+  // Effect to trigger AI move when it's AI's turn
+  useEffect(() => {
+    if (gameMode === 'ai' && playerColor !== null && !isAIThinking && !pendingPromotion) {
+      const aiColor = playerColor === Color.Black ? Color.White : Color.Black;
+      if (turn === aiColor) {
+        // Small delay to let UI update before AI thinks
+        const timer = setTimeout(() => {
+          makeAIMove();
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [turn, gameMode, playerColor, isAIThinking, pendingPromotion]);
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -326,8 +404,37 @@ function App() {
             setView('game');
             resetGame();
           }}
+          onPlayAI={() => {
+            setView('ai-setup');
+          }}
           onCreateGame={handleCreateGame}
           onJoinGame={handleJoinGame}
+        />
+      )}
+
+      {view === 'ai-setup' && (
+        <AIGameSetup
+          onStart={async (difficulty, color) => {
+            setPlayerColor(color);
+            setGameMode('ai');
+            setView('game');
+            resetGame();
+
+            // Initialize AI engine
+            try {
+              await usiEngine.initialize();
+              usiEngine.setDifficulty(difficulty);
+
+              // If AI plays as Black (starts first), make AI move
+              if (color === Color.White) {
+                setTimeout(() => makeAIMove(), 500);
+              }
+            } catch (error) {
+              console.error('Failed to initialize AI:', error);
+              alert('Error al inicializar la IA. Por favor, recarga la página.');
+            }
+          }}
+          onBack={() => setView('menu')}
         />
       )}
 
